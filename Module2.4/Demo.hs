@@ -148,3 +148,68 @@ instance Monad PrsE where
         parse string = do
             (value,tail) <- runPrsE parser string
             runPrsE (fun value) tail
+
+
+data OddC a = Un a | Bi a a (OddC a) deriving (Eq, Show)
+
+concat3OC :: OddC a -> OddC a -> OddC a -> OddC a
+concat3OC (Bi x1 y1 c1) c2 c3      = Bi x1 y1 (concat3OC c1 c2 c3)
+concat3OC (Un x1) (Bi x2 y2 c2) c3 = Bi x1 x2 (concat3OC (Un y2) c2 c3)
+concat3OC (Un x1) (Un x2) c3       = Bi x1 x2 c3
+
+
+concatOC :: OddC (OddC a) -> OddC a
+concatOC (Un c)     = c
+concatOC (Bi x y c) = concat3OC x y (concatOC c)
+
+
+tst1' = Bi 'a' 'b' (Un 'c')
+tst2' = Bi 'd' 'e' (Bi 'f' 'g' (Un 'h'))
+tst3' = Bi 'i' 'j' (Un 'k')
+
+
+instance Functor OddC where
+  --fmap :: (a -> b) -> OddC a -> OddC b
+    fmap f (Un x)     = Un (f x)
+    fmap f (Bi x y c) = Bi (f x) (f y) (fmap f c)
+
+instance Applicative OddC where
+  --pure :: a -> OddC a
+    pure = return
+  --(<*>) :: OddC (a -> b) -> OddC a -> OddC b
+    (<*>) fs args = do { f <- fs; arg <- args; return (f arg) }
+
+instance Monad OddC where
+  --return :: a -> OddC a
+    return = Un
+  --(>>=) :: OddC a -> (a -> OddC b) -> OddC b
+    (>>=) args fs = concatOC $ fmap fs args
+
+
+tst1 = Bi 10 20 (Un 30)
+tst2 = Bi 1 2 (Bi 3 4 (Un 5))
+
+
+{-
+Трансляция
+
+do pat <- computation   >>>     let f pat = more
+   more                 >>>         f _   = fail "..."
+                        >>>     in computation >>= f
+
+
+
+
+MonadFail Proposal (начала реализовываться в GHC 8.0)
+
+class Monad m => MonadFail m where
+    fail :: String -> m a
+
+> f xs = do { True <- xs; return () }
+> :t f
+f :: MonadFail m => m Bool -> m ()
+
+> f' xs = do { ~True <- xs; return () }
+> :t f'
+f' :: Monad m => m Bool -> m ()
+-}
